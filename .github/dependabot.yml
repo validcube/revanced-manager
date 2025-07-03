@@ -1,43 +1,43 @@
 version: 2
 
 multi-ecosystem-groups:
+  # Default (Branch) Infrastructure Update
   infrastructure:
     schedule:
       interval: "weekly"
+      target-branch: dev
 
   flutter:
     schedule:
       interval: "weekly"
+      target-branch: dev
   
   compose:
     schedule:
       interval: "daily"
+      target-branch: compose-dev
 
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
-    target-branch: dev
     multi-ecosystem-group: "infrastructure"
     patterns:
       - "*"
     
   - package-ecosystem: "npm"
     directory: "/"
-    target-branch: dev
     multi-ecosystem-group: "infrastructure"
     patterns:
       - "*"
     
   - package-ecosystem: "pub"
     directory: "/"
-    target-branch: dev
     multi-ecosystem-group: "flutter"
     patterns:
       - "*"
     
   - package-ecosystem: "gradle"
     directory: "/android"
-    target-branch: dev
     multi-ecosystem-group: "flutter"
     patterns:
       - "*"
@@ -45,7 +45,6 @@ updates:
   - package-ecosystem: "gradle"
     labels: [ "ReVanced Manager Compose" ]
     directory: /
-    target-branch: compose-dev
     multi-ecosystem-group: "compose"
     patterns:
       - "*"
