@@ -4,38 +4,28 @@ multi-ecosystem-groups:
   infrastructure:
     schedule:
       interval: "weekly"
-
-  flutter:
-    schedule:
-      interval: "weekly"
   
-  compose:
+  full-stack:
     schedule:
       interval: "daily"
 
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
-    target-branch: dev
     multi-ecosystem-group: "infrastructure"
   
-  - package-ecosystem: "npm"
+  - package-ecosystem: "terraform"
     directory: "/"
-    target-branch: dev
     multi-ecosystem-group: "infrastructure"
     
-  - package-ecosystem: "pub"
+  - package-ecosystem: "pip"
     directory: "/"
-    target-branch: dev
-    multi-ecosystem-group: "flutter"
+    multi-ecosystem-group: "infrastructure"
 
-  - package-ecosystem: "gradle"
-    directory: "/android"
-    target-branch: dev
-    multi-ecosystem-group: "flutter"
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    multi-ecosystem-group: "full-stack"
     
-  - package-ecosystem: "gradle"
-    labels: [ "ReVanced Manager Compose" ]
-    directory: /
-    target-branch: compose-dev
-    multi-ecosystem-group: "compose"
+  - package-ecosystem: "bundler"
+    directory: "/backend"
+    multi-ecosystem-group: "full-stack"
