@@ -1,7 +1,7 @@
 version: 2
 
 multi-ecosystem-groups:
-  # Default (Branch) Infrastructure Update
+  # Default (Branch) Infrastructure Update.
   infrastructure:
     schedule:
       interval: "weekly"
