@@ -1,6 +1,12 @@
+multi-ecosystem-groups:
+  infrastructure:
+    schedule:
+      interval: "weekly"
+
 version: 2
 updates:
   - package-ecosystem: github-actions
+    multi-ecosystem-group: "infrastructure"
     labels: []
     directory: /
     target-branch: dev
@@ -16,6 +22,7 @@ updates:
         - "patch"
 
   - package-ecosystem: npm
+    multi-ecosystem-group: "infrastructure"
     labels: []
     directory: /
     target-branch: dev
@@ -32,6 +39,7 @@ updates:
 
   # ReVanced Manager Flutter
   - package-ecosystem: pub
+    multi-ecosystem-group: "infrastructure"
     labels: []
     directory: /
     target-branch: dev
@@ -47,6 +55,7 @@ updates:
         - "patch"
 
   - package-ecosystem: gradle
+    multi-ecosystem-group: "infrastructure"
     labels: []
     directory: /android
     target-branch: dev
