@@ -13,15 +13,17 @@ class SManageApiUrl extends BaseViewModel {
   final TextEditingController _apiUrlController = TextEditingController();
 
   Future<void> showApiUrlDialog(BuildContext context) async {
-    final String apiUrl = _managerAPI.getApiUrl();
-    _apiUrlController.text = apiUrl.replaceAll('https://', '');
+    final apiUrl = _managerAPI.getApiUrl();
+
+    _apiUrlController.text = apiUrl;
     return showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Row(
           children: <Widget>[
-            Text(t.settingsView.apiURLLabel),
-            const Spacer(),
+            Expanded(
+              child: Text(t.settingsView.apiURLLabel),
+            ),
             IconButton(
               icon: const Icon(Icons.manage_history_outlined),
               onPressed: () => showApiUrlResetDialog(context),
@@ -59,11 +61,7 @@ class SManageApiUrl extends BaseViewModel {
           ),
           FilledButton(
             onPressed: () {
-              String apiUrl = _apiUrlController.text;
-              if (!apiUrl.startsWith('https')) {
-                apiUrl = 'https://$apiUrl';
-              }
-              _managerAPI.setApiUrl(apiUrl);
+              _managerAPI.setApiUrl(_apiUrlController.text);
               Navigator.of(context).pop();
             },
             child: Text(t.okButton),
@@ -86,7 +84,7 @@ class SManageApiUrl extends BaseViewModel {
           ),
           FilledButton(
             onPressed: () {
-              _managerAPI.setApiUrl('');
+              _managerAPI.resetApiUrl();
               Navigator.of(context)
                 ..pop()
                 ..pop();

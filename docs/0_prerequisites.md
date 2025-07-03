@@ -4,10 +4,8 @@ To use ReVanced Manager, you need to fulfill certain requirements.
 
 ## 🤝 Requirements
 
-- An Android device running Android 8 or higher
-- Any device architecture except ARMv7[^1]
-
-[^1]: Patching on ARMv7 is limited to bytecode patching but may work in certain circumstances for resource patching. You can check your device architecture in ReVanced Manager settings.
+- Android device running Android 8.0 or higher
+- Device's CPU supporting at least `arm64-v8a`, `armeabi-v7a`, or `x86_64` architecture(s)
 
 ## ⏭️ What's next
 

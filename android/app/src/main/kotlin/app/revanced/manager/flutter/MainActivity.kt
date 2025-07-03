@@ -12,11 +12,11 @@ import app.revanced.library.ApkUtils.applyTo
 import app.revanced.manager.flutter.utils.Aapt
 import app.revanced.manager.flutter.utils.packageInstaller.InstallerReceiver
 import app.revanced.manager.flutter.utils.packageInstaller.UninstallerReceiver
-import app.revanced.patcher.PatchBundleLoader
-import app.revanced.patcher.PatchSet
 import app.revanced.patcher.Patcher
 import app.revanced.patcher.PatcherConfig
+import app.revanced.patcher.patch.Patch
 import app.revanced.patcher.patch.PatchResult
+import app.revanced.patcher.patch.loadPatchesFromDex
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -37,7 +37,7 @@ class MainActivity : FlutterActivity() {
     private var cancel: Boolean = false
     private var stopResult: MethodChannel.Result? = null
 
-    private lateinit var patches: PatchSet
+    private lateinit var patches: Set<Patch<*>>
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -70,7 +70,6 @@ class MainActivity : FlutterActivity() {
                 "runPatcher" -> {
                     val inFilePath = call.argument<String>("inFilePath")
                     val outFilePath = call.argument<String>("outFilePath")
-                    val integrationsPath = call.argument<String>("integrationsPath")
                     val selectedPatches = call.argument<List<String>>("selectedPatches")
                     val options = call.argument<Map<String, Map<String, Any>>>("options")
                     val tmpDirPath = call.argument<String>("tmpDirPath")
@@ -80,7 +79,6 @@ class MainActivity : FlutterActivity() {
                     if (
                         inFilePath != null &&
                         outFilePath != null &&
-                        integrationsPath != null &&
                         selectedPatches != null &&
                         options != null &&
                         tmpDirPath != null &&
@@ -92,14 +90,17 @@ class MainActivity : FlutterActivity() {
                             result,
                             inFilePath,
                             outFilePath,
-                            integrationsPath,
                             selectedPatches,
                             options,
                             tmpDirPath,
                             keyStoreFilePath,
                             keystorePassword
                         )
-                    } else result.notImplemented()
+                    } else result.error(
+                        "INVALID_ARGUMENTS",
+                        "Invalid arguments",
+                        "One or more arguments are missing"
+                    )
                 }
 
                 "stopPatcher" -> {
@@ -109,19 +110,20 @@ class MainActivity : FlutterActivity() {
 
                 "getPatches" -> {
                     val patchBundleFilePath = call.argument<String>("patchBundleFilePath")!!
-                    val cacheDirPath = call.argument<String>("cacheDirPath")!!
 
                     try {
                         val patchBundleFile = File(patchBundleFilePath)
                         patchBundleFile.setWritable(false)
-                        patches = PatchBundleLoader.Dex(
-                            patchBundleFile,
-                            optimizedDexDirectory = File(cacheDirPath)
+                        patches = loadPatchesFromDex(
+                            setOf(patchBundleFile),
+                            optimizedDexDirectory = codeCacheDir
                         )
-                    } catch (ex: Exception) {
-                        return@setMethodCallHandler result.notImplemented()
-                    } catch (err: Error) {
-                        return@setMethodCallHandler result.notImplemented()
+                    } catch (t: Throwable) {
+                        return@setMethodCallHandler result.error(
+                            "PATCH_BUNDLE_ERROR",
+                            "Failed to load patch bundle",
+                            t.stackTraceToString()
+                        )
                     }
 
                     JSONArray().apply {
@@ -131,13 +133,13 @@ class MainActivity : FlutterActivity() {
                                 put("description", it.description)
                                 put("excluded", !it.use)
                                 put("compatiblePackages", JSONArray().apply {
-                                    it.compatiblePackages?.forEach { compatiblePackage ->
+                                    it.compatiblePackages?.forEach { (name, versions) ->
                                         val compatiblePackageJson = JSONObject().apply {
-                                            put("name", compatiblePackage.name)
+                                            put("name", name)
                                             put(
                                                 "versions",
                                                 JSONArray().apply {
-                                                    compatiblePackage.versions?.forEach { version ->
+                                                    versions?.forEach { version ->
                                                         put(version)
                                                     }
                                                 })
@@ -166,14 +168,15 @@ class MainActivity : FlutterActivity() {
                                             putValue(option.default)
 
                                             option.values?.let { values ->
-                                                put("values",
+                                                put(
+                                                    "values",
                                                     JSONObject().apply {
                                                         values.forEach { (key, value) ->
                                                             putValue(value, key)
                                                         }
                                                     })
                                             } ?: put("values", null)
-                                            put("valueType", option.valueType)
+                                            put("type", option.type)
                                         }.let(::put)
                                     }
                                 })
@@ -212,7 +215,6 @@ class MainActivity : FlutterActivity() {
         result: MethodChannel.Result,
         inFilePath: String,
         outFilePath: String,
-        integrationsPath: String,
         selectedPatches: List<String>,
         options: Map<String, Map<String, Any>>,
         tmpDirPath: String,
@@ -220,8 +222,10 @@ class MainActivity : FlutterActivity() {
         keystorePassword: String
     ) {
         val inFile = File(inFilePath)
+        // Necessary because the file is copied from a nonwriteable location.
+        inFile.setWritable(true)
+        inFile.setReadable(true)
         val outFile = File(outFilePath)
-        val integrations = File(integrationsPath)
         val keyStoreFile = File(keyStoreFilePath)
         val tmpDir = File(tmpDirPath)
 
@@ -253,16 +257,19 @@ class MainActivity : FlutterActivity() {
 
             // Setup logger
             Logger.getLogger("").apply {
-                handlers.forEach {
-                    it.close()
-                    removeHandler(it)
+                handlers.forEach { handler ->
+                    handler.close()
+                    removeHandler(handler)
                 }
 
                 object : java.util.logging.Handler() {
                     override fun publish(record: LogRecord) {
-                        if (record.loggerName?.startsWith("app.revanced") != true || cancel) return
-
-                        updateProgress(-1.0, "", record.message)
+                        if (cancel) return
+                        if (
+                            record.loggerName?.startsWith("app.revanced") == true ||
+                            // Logger in class brut.util.OS.
+                            record.loggerName == ""
+                        ) updateProgress(-1.0, "", record.message)
                     }
 
                     override fun flush() = Unit
@@ -279,7 +286,6 @@ class MainActivity : FlutterActivity() {
                         tmpDir,
                         Aapt.binary(applicationContext).absolutePath,
                         tmpDir.path,
-                        true // TODO: Add option to disable this
                     )
                 )
 
@@ -287,8 +293,8 @@ class MainActivity : FlutterActivity() {
                 updateProgress(0.02, "Loading patches...", "Loading patches")
 
                 val patches = patches.filter { patch ->
-                    val isCompatible = patch.compatiblePackages?.any {
-                        it.name == patcher.context.packageMetadata.packageName
+                    val isCompatible = patch.compatiblePackages?.any { (name, _) ->
+                        name == patcher.context.packageMetadata.packageName
                     } ?: false
 
                     val compatibleOrUniversal =
@@ -305,10 +311,7 @@ class MainActivity : FlutterActivity() {
                 updateProgress(0.05, "Executing...", "")
 
                 val patcherResult = patcher.use {
-                    patcher.apply {
-                        acceptIntegrations(setOf(integrations))
-                        acceptPatches(patches)
-                    }
+                    it += patches
 
                     runBlocking {
                         // Update the progress bar every time a patch is executed from 0.15 to 0.7
@@ -316,7 +319,7 @@ class MainActivity : FlutterActivity() {
                         val progressStep = 0.55 / totalPatchesCount
                         var progress = 0.05
 
-                        patcher.apply(false).collect(FlowCollector { patchResult: PatchResult ->
+                        patcher().collect(FlowCollector { patchResult: PatchResult ->
                             if (cancel(patcher::close)) return@FlowCollector
 
                             val msg = patchResult.exception?.let {
@@ -344,10 +347,11 @@ class MainActivity : FlutterActivity() {
 
                 if (cancel(patcher::close)) return@Thread
 
-                ApkUtils.sign(
+                ApkUtils.signApk(
                     inFile,
                     outFile,
-                    ApkUtils.SigningOptions(
+                    "ReVanced",
+                    ApkUtils.KeyStoreDetails(
                         keyStoreFile,
                         keystorePassword,
                         "alias",
@@ -365,6 +369,9 @@ class MainActivity : FlutterActivity() {
                         "An error occurred:\n$stack"
                     )
                 }
+            } finally {
+                inFile.delete()
+                tmpDir.deleteRecursively()
             }
 
             handler.post { result.success(null) }

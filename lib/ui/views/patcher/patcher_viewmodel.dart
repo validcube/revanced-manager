@@ -28,6 +28,7 @@ class PatcherViewModel extends BaseViewModel {
   BuildContext? ctx;
   List<Patch> selectedPatches = [];
   List<String> removedPatches = [];
+  List<String> newPatches = [];
 
   void navigateToAppSelector() {
     _navigationService.navigateTo(Routes.appSelectorView);
@@ -55,9 +56,16 @@ class PatcherViewModel extends BaseViewModel {
         context: context,
         builder: (context) => AlertDialog(
           title: Text(t.notice),
-          content: Text(
-            t.patcherView.removedPatchesWarningDialogText(
-              patches: removedPatches.join('\n'),
+          content: SingleChildScrollView(
+            child: Text(
+              t.patcherView.removedPatchesWarningDialogText(
+                patches: removedPatches.join('\n'),
+                newPatches: newPatches.isNotEmpty
+                    ? t.patcherView.addedPatchesDialogText(
+                        addedPatches: newPatches.join('\n'),
+                      )
+                    : '',
+              ),
             ),
           ),
           actions: <Widget>[
@@ -70,7 +78,7 @@ class PatcherViewModel extends BaseViewModel {
             FilledButton(
               onPressed: () {
                 Navigator.of(context).pop();
-                showArmv7WarningDialog(context);
+                showIncompatibleArchWarningDialog(context);
               },
               child: Text(t.yesButton),
             ),
@@ -116,18 +124,18 @@ class PatcherViewModel extends BaseViewModel {
     );
   }
 
-  Future<void> showArmv7WarningDialog(BuildContext context) async {
-    final bool armv7 = await AboutInfo.getInfo().then((info) {
+  Future<void> showIncompatibleArchWarningDialog(BuildContext context) async {
+    final bool notSupported = await AboutInfo.getInfo().then((info) {
       final List<String> archs = info['supportedArch'];
-      final supportedAbis = ['arm64-v8a', 'x86', 'x86_64'];
+      final supportedAbis = ['arm64-v8a', 'x86', 'x86_64', 'armeabi-v7a'];
       return !archs.any((arch) => supportedAbis.contains(arch));
     });
-    if (context.mounted && armv7) {
+    if (context.mounted && notSupported) {
       return showDialog(
         context: context,
         builder: (context) => AlertDialog(
           title: Text(t.warning),
-          content: Text(t.patcherView.armv7WarningDialogText),
+          content: Text(t.patcherView.incompatibleArchWarningDialogText),
           actions: <Widget>[
             FilledButton(
               onPressed: () => Navigator.of(context).pop(),
@@ -186,14 +194,14 @@ class PatcherViewModel extends BaseViewModel {
     }
     if (savedPatchNames.isEmpty) {
       return false;
-    } else {
-      return !savedPatchNames.contains(patch.name);
     }
+    return !savedPatchNames.contains(patch.name);
   }
 
   Future<void> loadLastSelectedPatches() async {
     this.selectedPatches.clear();
     removedPatches.clear();
+    newPatches.clear();
     final List<String> selectedPatches =
         await _managerAPI.getSelectedPatches(selectedApp!.packageName);
     final List<Patch> patches =
@@ -232,6 +240,11 @@ class PatcherViewModel extends BaseViewModel {
             option.key,
           );
         }
+      }
+    }
+    for (final patch in patches) {
+      if (isPatchNew(patch)) {
+        newPatches.add('• ${patch.name}');
       }
     }
     notifyListeners();

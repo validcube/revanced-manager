@@ -1,4 +1,6 @@
 // ignore_for_file: use_build_context_synchronously
+import 'dart:io';
+
 import 'package:device_apps/device_apps.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -30,6 +32,7 @@ class InstallerViewModel extends BaseViewModel {
   static const _installerChannel = MethodChannel(
     'app.revanced.manager.flutter/installer',
   );
+  final Key logCustomScrollKey = UniqueKey();
   final ScrollController scrollController = ScrollController();
   final ScreenshotCallback screenshotCallback = ScreenshotCallback();
   double? progress = 0.0;
@@ -43,6 +46,57 @@ class InstallerViewModel extends BaseViewModel {
   bool isCanceled = false;
   bool cancel = false;
   bool showPopupScreenshotWarning = true;
+
+  bool showAutoScrollButton = false;
+  bool _isAutoScrollEnabled = true;
+  bool _isAutoScrolling = false;
+
+  double get getCurrentScrollPercentage {
+    final maxScrollExtent = scrollController.position.maxScrollExtent;
+    final currentPosition = scrollController.position.pixels;
+
+    return currentPosition / maxScrollExtent;
+  }
+
+  bool handleAutoScrollNotification(ScrollNotification event) {
+    if (_isAutoScrollEnabled && event is ScrollStartNotification) {
+      _isAutoScrollEnabled = _isAutoScrolling;
+      showAutoScrollButton = false;
+      notifyListeners();
+
+      return true;
+    }
+
+    if (event is ScrollEndNotification) {
+      const anchorThreshold = 0.987;
+
+      _isAutoScrollEnabled =
+          _isAutoScrolling || getCurrentScrollPercentage >= anchorThreshold;
+
+      showAutoScrollButton = !_isAutoScrollEnabled && !_isAutoScrolling;
+      notifyListeners();
+
+      return true;
+    }
+
+    return false;
+  }
+
+  void scrollToBottom() {
+    _isAutoScrolling = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final maxScrollExtent = scrollController.position.maxScrollExtent;
+
+      await scrollController.animateTo(
+        maxScrollExtent,
+        duration: const Duration(milliseconds: 100),
+        curve: Curves.fastOutSlowIn,
+      );
+
+      _isAutoScrolling = false;
+    });
+  }
 
   Future<void> initialize(BuildContext context) async {
     isRooted = await _rootAPI.isRooted();
@@ -107,6 +161,19 @@ class InstallerViewModel extends BaseViewModel {
         _app.packageName,
       );
       await _managerAPI.setUsedPatches(_patches, _app.packageName);
+      _managerAPI.setLastUsedPatchesVersion(
+        version: _managerAPI.patchesVersion,
+      );
+      _app.appliedPatches = _patches.map((p) => p.name).toList();
+      if (_managerAPI.isLastPatchedAppEnabled()) {
+        await _managerAPI.setLastPatchedApp(_app, _patcherAPI.outFile!);
+      } else {
+        _app.patchedFilePath = _patcherAPI.outFile!.path;
+      }
+      final homeViewModel = locator<HomeViewModel>();
+      _managerAPI
+          .reAssessPatchedApps()
+          .then((_) => homeViewModel.getPatchedApps());
     } else if (value == -100.0) {
       isPatching = false;
       hasErrors = true;
@@ -123,13 +190,9 @@ class InstallerViewModel extends BaseViewModel {
       if (logs[logs.length - 1] == '\n') {
         logs = logs.substring(0, logs.length - 1);
       }
-      Future.delayed(const Duration(milliseconds: 100)).then((value) {
-        scrollController.animateTo(
-          scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 100),
-          curve: Curves.fastOutSlowIn,
-        );
-      });
+      if (_isAutoScrollEnabled) {
+        scrollToBottom();
+      }
     }
     notifyListeners();
   }
@@ -140,6 +203,7 @@ class InstallerViewModel extends BaseViewModel {
         _app.packageName,
         _app.apkFilePath,
         _patches,
+        _app.isFromStorage,
       );
     } on Exception catch (e) {
       update(
@@ -268,7 +332,6 @@ class InstallerViewModel extends BaseViewModel {
       'Version compatibility check: ${_managerAPI.isVersionCompatibilityCheckEnabled()}',
       'Show universal patches: ${_managerAPI.areUniversalPatchesEnabled()}',
       'Patches source: ${_managerAPI.getPatchesRepo()}',
-      'Integration source: ${_managerAPI.getIntegrationsRepo()}', //
 
       '\n- Logs',
       logsTrimmed.join('\n'),
@@ -443,7 +506,7 @@ class InstallerViewModel extends BaseViewModel {
       _app.isRooted = installAsRoot;
       if (headerLogs != 'Installing...') {
         update(
-          .85,
+          -1.0,
           'Installing...',
           _app.isRooted ? 'Mounting patched app' : 'Installing patched app',
         );
@@ -453,7 +516,6 @@ class InstallerViewModel extends BaseViewModel {
         isInstalled = true;
         _app.isFromStorage = false;
         _app.patchDate = DateTime.now();
-        _app.appliedPatches = _patches.map((p) => p.name).toList();
 
         // In case a patch changed the app name or package name,
         // update the app info.
@@ -463,7 +525,6 @@ class InstallerViewModel extends BaseViewModel {
           _app.name = app.appName;
           _app.packageName = app.packageName;
         }
-
         await _managerAPI.savePatchedApp(_app);
 
         _managerAPI
@@ -473,7 +534,7 @@ class InstallerViewModel extends BaseViewModel {
         update(1.0, 'Installed', 'Installed');
       } else if (response == 3) {
         update(
-          .85,
+          -1.0,
           'Installation canceled',
           'Installation canceled',
         );
@@ -481,7 +542,7 @@ class InstallerViewModel extends BaseViewModel {
         installResult(context, installAsRoot);
       } else {
         update(
-          .85,
+          -1.0,
           'Installation failed',
           'Installation failed',
         );
@@ -496,7 +557,7 @@ class InstallerViewModel extends BaseViewModel {
 
   void exportResult() {
     try {
-      _patcherAPI.exportPatchedFile(_app.name, _app.version);
+      _patcherAPI.exportPatchedFile(_app);
     } on Exception catch (e) {
       if (kDebugMode) {
         print(e);
@@ -507,6 +568,10 @@ class InstallerViewModel extends BaseViewModel {
   Future<void> cleanPatcher() async {
     try {
       _patcherAPI.cleanPatcher();
+      if (_app.isFromStorage) {
+        // The selected apk was copied to cacheDir by the file picker, so it's not needed anymore.
+        File(_app.apkFilePath).delete();
+      }
       locator<PatcherViewModel>().selectedApp = null;
       locator<PatcherViewModel>().selectedPatches.clear();
       locator<PatcherViewModel>().notifyListeners();

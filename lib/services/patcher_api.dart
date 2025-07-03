@@ -18,8 +18,7 @@ import 'package:share_plus/share_plus.dart';
 
 @lazySingleton
 class PatcherAPI {
-  static const patcherChannel =
-      MethodChannel('app.revanced.manager.flutter/patcher');
+  static const patcherChannel = MethodChannel('app.revanced.manager.flutter/patcher');
   final ManagerAPI _managerAPI = locator<ManagerAPI>();
   final RootAPI _rootAPI = RootAPI();
   late Directory _dataDir;
@@ -27,14 +26,13 @@ class PatcherAPI {
   late File _keyStoreFile;
   List<Patch> _patches = [];
   List<Patch> _universalPatches = [];
-  List<String> _compatiblePackages = [];
+  Set<String> _compatiblePackages = {};
   Map filteredPatches = <String, List<Patch>>{};
   File? outFile;
 
   Future<void> initialize() async {
     await loadPatches();
-    await _managerAPI.downloadIntegrations();
-    final Directory appCache = await getTemporaryDirectory();
+    final Directory appCache = await getApplicationSupportDirectory();
     _dataDir = await getExternalStorageDirectory() ?? appCache;
     _tmpDir = Directory('${appCache.path}/patcher');
     _keyStoreFile = File('${_dataDir.path}/revanced-manager.keystore');
@@ -47,8 +45,8 @@ class PatcherAPI {
     }
   }
 
-  List<String> getCompatiblePackages() {
-    final List<String> compatiblePackages = [];
+  Set<String> getCompatiblePackages() {
+    final Set<String> compatiblePackages = {};
     for (final Patch patch in _patches) {
       for (final Package package in patch.compatiblePackages) {
         if (!compatiblePackages.contains(package.name)) {
@@ -67,16 +65,16 @@ class PatcherAPI {
     try {
       if (_patches.isEmpty) {
         _patches = await _managerAPI.getPatches();
+        _universalPatches = getUniversalPatches();
+        _compatiblePackages = getCompatiblePackages();
       }
     } on Exception catch (e) {
       if (kDebugMode) {
         print(e);
       }
+
       _patches = List.empty();
     }
-
-    _compatiblePackages = getCompatiblePackages();
-    _universalPatches = getUniversalPatches();
   }
 
   Future<List<ApplicationWithIcon>> getFilteredInstalledApps(
@@ -85,6 +83,7 @@ class PatcherAPI {
     final List<ApplicationWithIcon> filteredApps = [];
     final bool allAppsIncluded =
         _universalPatches.isNotEmpty && showUniversalPatches;
+
     if (allAppsIncluded) {
       final appList = await DeviceApps.getInstalledApplications(
         includeAppIcons: true,
@@ -95,6 +94,7 @@ class PatcherAPI {
         filteredApps.add(app as ApplicationWithIcon);
       }
     }
+
     for (final packageName in _compatiblePackages) {
       try {
         if (!filteredApps.any((app) => app.packageName == packageName)) {
@@ -151,8 +151,8 @@ class PatcherAPI {
     String packageName,
     String apkFilePath,
     List<Patch> selectedPatches,
+    bool isFromStorage,
   ) async {
-    final File? integrationsFile = await _managerAPI.downloadIntegrations();
     final Map<String, Map<String, dynamic>> options = {};
     for (final patch in selectedPatches) {
       if (patch.options.isNotEmpty) {
@@ -168,37 +168,34 @@ class PatcherAPI {
       }
     }
 
-    if (integrationsFile != null) {
-      _dataDir.createSync();
-      _tmpDir.createSync();
-      final Directory workDir = await _tmpDir.createTemp('tmp-');
+    _dataDir.createSync();
+    _tmpDir.createSync();
+    final Directory workDir = await _tmpDir.createTemp('tmp-');
 
-      final File inApkFile = File('${workDir.path}/in.apk');
-      await File(apkFilePath).copy(inApkFile.path);
+    final File inApkFile = File('${workDir.path}/in.apk');
+    await File(apkFilePath).copy(inApkFile.path);
 
-      outFile = File('${workDir.path}/out.apk');
+    outFile = File('${workDir.path}/out.apk');
 
-      final Directory tmpDir =
-          Directory('${workDir.path}/revanced-temporary-files');
+    final Directory tmpDir =
+        Directory('${workDir.path}/revanced-temporary-files');
 
-      try {
-        await patcherChannel.invokeMethod(
-          'runPatcher',
-          {
-            'inFilePath': inApkFile.path,
-            'outFilePath': outFile!.path,
-            'integrationsPath': integrationsFile.path,
-            'selectedPatches': selectedPatches.map((p) => p.name).toList(),
-            'options': options,
-            'tmpDirPath': tmpDir.path,
-            'keyStoreFilePath': _keyStoreFile.path,
-            'keystorePassword': _managerAPI.getKeystorePassword(),
-          },
-        );
-      } on Exception catch (e) {
-        if (kDebugMode) {
-          print(e);
-        }
+    try {
+      await patcherChannel.invokeMethod(
+        'runPatcher',
+        {
+          'inFilePath': inApkFile.path,
+          'outFilePath': outFile!.path,
+          'selectedPatches': selectedPatches.map((p) => p.name).toList(),
+          'options': options,
+          'tmpDirPath': tmpDir.path,
+          'keyStoreFilePath': _keyStoreFile.path,
+          'keystorePassword': _managerAPI.getKeystorePassword(),
+        },
+      );
+    } on Exception catch (e) {
+      if (kDebugMode) {
+        print(e);
       }
     }
   }
@@ -217,7 +214,7 @@ class PatcherAPI {
     BuildContext context,
     PatchedApplication patchedApp,
   ) async {
-    if (outFile != null) {
+    if (patchedApp.patchedFilePath != '') {
       _managerAPI.ctx = context;
       try {
         if (patchedApp.isRooted) {
@@ -232,7 +229,7 @@ class PatcherAPI {
             return await _rootAPI.install(
               patchedApp.packageName,
               patchedApp.apkFilePath,
-              outFile!.path,
+              patchedApp.patchedFilePath,
             )
                 ? 0
                 : 1;
@@ -246,7 +243,7 @@ class PatcherAPI {
           if (context.mounted) {
             return await installApk(
               context,
-              outFile!.path,
+              patchedApp.patchedFilePath,
             );
           }
         }
@@ -368,13 +365,13 @@ class PatcherAPI {
     return cleanInstall ? 10 : 1;
   }
 
-  void exportPatchedFile(String appName, String version) {
+  void exportPatchedFile(PatchedApplication app) {
     try {
       if (outFile != null) {
-        final String newName = _getFileName(appName, version);
+        final String newName = _getFileName(app.name, app.version);
         FlutterFileDialog.saveFile(
           params: SaveFileDialogParams(
-            sourceFilePath: outFile!.path,
+            sourceFilePath: app.patchedFilePath,
             fileName: newName,
             mimeTypesFilter: ['application/vnd.android.package-archive'],
           ),
@@ -387,14 +384,14 @@ class PatcherAPI {
     }
   }
 
-  void sharePatchedFile(String appName, String version) {
+  void sharePatchedFile(PatchedApplication app) {
     try {
       if (outFile != null) {
-        final String newName = _getFileName(appName, version);
-        final int lastSeparator = outFile!.path.lastIndexOf('/');
+        final String newName = _getFileName(app.name, app.version);
+        final int lastSeparator = app.patchedFilePath.lastIndexOf('/');
         final String newPath =
-            outFile!.path.substring(0, lastSeparator + 1) + newName;
-        final File shareFile = outFile!.copySync(newPath);
+            app.patchedFilePath.substring(0, lastSeparator + 1) + newName;
+        final File shareFile = File(app.patchedFilePath).copySync(newPath);
         Share.shareXFiles([XFile(shareFile.path)]);
       }
     } on Exception catch (e) {

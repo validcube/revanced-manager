@@ -12,6 +12,8 @@ env:
 jobs:
   pull-request:
     name: Open pull request
+    permissions:
+      pull-requests: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

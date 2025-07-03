@@ -50,6 +50,7 @@ Learn how to configure ReVanced Manager.
   - 🔑 Keystore used to sign patched apps
   - 📄 Remembered selection of patches for each app
   - ⚙️ Remembered patch options
+  - 🛠️ Remembered settings
 
   > ℹ️ Note  
   > These can be used to backup and restore or reset settings to default in case of issues.
@@ -60,6 +61,6 @@ Learn how to configure ReVanced Manager.
 
 ## ⏭️ What's next
 
-The next page will lead back to the usage page.
+The next page will explain how to troubleshoot issues with ReVanced Manager.
 
-Continue: [🛠️ Usage](2_usage.md)
+Continue: [❔ Troubleshooting](3_troubleshooting.md)

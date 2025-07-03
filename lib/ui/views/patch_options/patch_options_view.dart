@@ -37,79 +37,35 @@ class PatchOptionsView extends StatelessWidget {
                     color: Theme.of(context).textTheme.titleLarge!.color,
                   ),
                 ),
-                actions: [
-                  IconButton(
-                    onPressed: () {
-                      model.resetOptions();
-                    },
-                    icon: const Icon(
-                      Icons.history,
-                    ),
-                    tooltip: t.patchOptionsView.resetOptionsTooltip,
-                  ),
-                ],
               ),
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.all(8.0),
                   child: Column(
                     children: [
-                      for (final Option option in model.visibleOptions)
-                        if (option.valueType == 'String' ||
-                            option.valueType == 'Int')
+                      for (final Option option in model.modifiedOptions)
+                        if (option.type == 'kotlin.String' ||
+                            option.type == 'kotlin.Int')
                           IntAndStringPatchOption(
                             patchOption: option,
-                            removeOption: (option) {
-                              model.removeOption(option);
-                            },
-                            onChanged: (value, option) {
-                              model.modifyOptions(value, option);
-                            },
+                            model: model,
                           )
-                        else if (option.valueType == 'Boolean')
+                        else if (option.type == 'kotlin.Boolean')
                           BooleanPatchOption(
                             patchOption: option,
-                            removeOption: (option) {
-                              model.removeOption(option);
-                            },
-                            onChanged: (value, option) {
-                              model.modifyOptions(value, option);
-                            },
+                            model: model,
                           )
-                        else if (option.valueType == 'StringArray' ||
-                            option.valueType == 'IntArray' ||
-                            option.valueType == 'LongArray')
+                        else if (option.type == 'kotlin.collections.List<kotlin.String>' ||
+                            option.type == 'kotlin.collections.List<kotlin.Int>' ||
+                            option.type == 'kotlin.collections.List<kotlin.Long>')
                           IntStringLongListPatchOption(
                             patchOption: option,
-                            removeOption: (option) {
-                              model.removeOption(option);
-                            },
-                            onChanged: (value, option) {
-                              model.modifyOptions(value, option);
-                            },
+                            model: model,
                           )
                         else
                           UnsupportedPatchOption(
                             patchOption: option,
                           ),
-                      if (model.visibleOptions.length !=
-                          model.options.length) ...[
-                        const SizedBox(
-                          height: 8,
-                        ),
-                        FilledButton(
-                          onPressed: () {
-                            model.showAddOptionDialog(context);
-                          },
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.add),
-                              Text(t.patchOptionsView.addOptions),
-                            ],
-                          ),
-                        ),
-                      ],
                       const SizedBox(
                         height: 80,
                       ),

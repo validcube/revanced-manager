@@ -30,30 +30,13 @@ class ContributorsView extends StatelessWidget {
               sliver: SliverList(
                 delegate: SliverChildListDelegate.fixed(
                   <Widget>[
-                    ContributorsCard(
-                      title: t.contributorsView.patcherContributors,
-                      contributors: model.patcherContributors,
-                    ),
-                    const SizedBox(height: 20),
-                    ContributorsCard(
-                      title: t.contributorsView.patchesContributors,
-                      contributors: model.patchesContributors,
-                    ),
-                    const SizedBox(height: 20),
-                    ContributorsCard(
-                      title: t.contributorsView.integrationsContributors,
-                      contributors: model.integrationsContributors,
-                    ),
-                    const SizedBox(height: 20),
-                    ContributorsCard(
-                      title: t.contributorsView.cliContributors,
-                      contributors: model.cliContributors,
-                    ),
-                    const SizedBox(height: 20),
-                    ContributorsCard(
-                      title: t.contributorsView.managerContributors,
-                      contributors: model.managerContributors,
-                    ),
+                    for (final String tool in model.contributors.keys) ...[
+                      ContributorsCard(
+                        title: tool,
+                        contributors: model.contributors[tool]!,
+                      ),
+                      const SizedBox(height: 20),
+                    ],
                     SizedBox(height: MediaQuery.viewPaddingOf(context).bottom),
                   ],
                 ),
