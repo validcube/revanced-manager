@@ -245,6 +245,7 @@ fun BundleInformationScreen(
                         preference = viewModel.prefs.usePatchesPrereleases,
                         headline = R.string.patches_prereleases,
                         description = stringResource(R.string.patches_prereleases_description, src.name),
+                        dialogTitle = R.string.prerelease_title,
                         confirmationText = R.string.prereleases_warning,
                         onValueChange = viewModel::updateUsePrereleases
                     )

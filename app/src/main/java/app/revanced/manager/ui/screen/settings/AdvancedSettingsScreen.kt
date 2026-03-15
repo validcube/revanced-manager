@@ -164,6 +164,7 @@ fun AdvancedSettingsScreen(
                 coroutineScope = viewModel.viewModelScope,
                 headline = R.string.patch_compat_check,
                 description = R.string.patch_compat_check_description,
+                dialogTitle = R.string.patch_compat_check_title,
                 confirmationText = R.string.patch_compat_check_confirmation
             )
             SafeguardBooleanItem(
@@ -171,6 +172,7 @@ fun AdvancedSettingsScreen(
                 coroutineScope = viewModel.viewModelScope,
                 headline = R.string.suggested_version_safeguard,
                 description = R.string.suggested_version_safeguard_description,
+                dialogTitle = R.string.suggested_version_safeguard_title,
                 confirmationText = R.string.suggested_version_safeguard_confirmation
             )
             SafeguardBooleanItem(
@@ -178,6 +180,7 @@ fun AdvancedSettingsScreen(
                 coroutineScope = viewModel.viewModelScope,
                 headline = R.string.patch_selection_safeguard,
                 description = R.string.patch_selection_safeguard_description,
+                dialogTitle = R.string.patch_selection_safeguard_title,
                 confirmationText = R.string.patch_selection_safeguard_confirmation
             )
                 SafeguardBooleanItem(
@@ -185,6 +188,7 @@ fun AdvancedSettingsScreen(
                     coroutineScope = viewModel.viewModelScope,
                     headline = R.string.universal_patches_safeguard,
                     description = R.string.universal_patches_safeguard_description,
+                    dialogTitle = R.string.universal_patches_safeguard_title,
                     confirmationText = R.string.universal_patches_safeguard_confirmation
                 )
             }
